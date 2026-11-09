@@ -15,6 +15,10 @@ namespace BiteMe.EditorWindowIcon
     /// Unity logo as a badge in the bottom-right corner. Projects without a Default Icon keep
     /// Unity's own icon. Picks up icon changes by itself.
     /// </summary>
+#if UNITY_6000_5_OR_NEWER
+    // The Editor update callback owns the native icon handles across Play Mode transitions.
+    [Unity.Scripting.LifecycleManagement.NoAutoStaticsCleanup]
+#endif
     [InitializeOnLoad]
     static class EditorWindowIcon
     {

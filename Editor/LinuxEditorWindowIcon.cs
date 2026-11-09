@@ -7,6 +7,10 @@ using UnityEngine.Rendering;
 
 namespace BiteMe.EditorWindowIcon
 {
+#if UNITY_6000_5_OR_NEWER
+    // Keep the X11 connection and window overrides until the Editor reload or quit callbacks.
+    [Unity.Scripting.LifecycleManagement.NoAutoStaticsCleanup]
+#endif
     [InitializeOnLoad]
     static class LinuxEditorWindowIcon
     {
