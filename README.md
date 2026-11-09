@@ -22,12 +22,12 @@ desktop session.
 
 | Desktop or OS | Unity window protocol | Features | Verification |
 | --- | --- | --- | --- |
+| Windows | Win32 | Window icons, separate taskbar groups, and pinned relaunch. | Build verified against Unity 6.6. |
 | KDE Plasma 6.6.6 on Wayland | XWayland | Live icons on main and floating windows, separate taskbar buttons, and a pinnable project launcher that reopens the same project and Editor version. | Verified on the stack above |
 | Other KDE Plasma / KWin setups | X11 or XWayland | Same Linux icon, taskbar grouping, and launcher code paths. | Pending live validation |
 | GNOME Shell / Mutter | X11 or XWayland | Window icons and a project launcher. The launcher matches the project's X11 window instance for dock grouping. | Dock grouping and pinning pending live validation. [GNOME Shell matching](https://github.com/GNOME/gnome-shell/blob/46.0/src/shell-window-tracker.c#L183-L201) |
 | Cinnamon, Xfce, and other EWMH desktops | X11 or XWayland | Window icons and a project launcher. The shell decides how to display and group tasks. | Pending live validation. [X11 window icon specification](https://specifications.freedesktop.org/wm/latest/ar01s05.html) |
 | Native Wayland clients | Wayland | Project launcher only. | Pending live validation |
-| Windows | Win32 | Window icons, separate taskbar groups, and pinned relaunch. | Windows code compiled against Unity 6.6. Runtime verification pending for this revision. |
 
 ## Install and use
 
