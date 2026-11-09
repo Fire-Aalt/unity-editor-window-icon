@@ -6,7 +6,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnityEditor;
-using UnityEditor.Build;
 using UnityEngine;
 
 namespace BiteMe.EditorWindowIcon
@@ -19,7 +18,6 @@ namespace BiteMe.EditorWindowIcon
     [InitializeOnLoad]
     static class EditorWindowIcon
     {
-        const float BadgeSize = 0.5f;       // badge edge as a fraction of the icon edge
         const double CheckInterval = 2.0;   // seconds between checks for a changed icon or window
         const string SessionKey = "BiteMe.EditorWindowIcon.Handles";
 
@@ -28,7 +26,7 @@ namespace BiteMe.EditorWindowIcon
         static string iconKey;
         static IntPtr bigIcon, smallIcon;
         static string iconFile;
-        static Pixels badge;
+        static IconPixels badge;
 
         static EditorWindowIcon()
         {
@@ -54,7 +52,7 @@ namespace BiteMe.EditorWindowIcon
                 return;
 
             int dpi = Dpi(windows[0]);
-            var texture = DefaultIcon();
+            var texture = ProjectIcon.GetDefault();
             string key = texture == null ? "" : $"{AssetDatabase.GetAssetPath(texture)}|{texture.imageContentsHash}|{dpi}";
             if (key != iconKey)
             {
@@ -71,12 +69,6 @@ namespace BiteMe.EditorWindowIcon
                     Apply(hwnd);
         }
 
-        static Texture2D DefaultIcon()
-        {
-            var icons = PlayerSettings.GetIcons(NamedBuildTarget.Unknown, IconKind.Any);
-            return icons != null && icons.Length > 0 ? icons[0] : null;
-        }
-
         static void Rebuild(Texture2D texture, int dpi, List<IntPtr> windows)
         {
             IntPtr oldBig = bigIcon, oldSmall = smallIcon;
@@ -87,10 +79,10 @@ namespace BiteMe.EditorWindowIcon
             {
                 try
                 {
-                    var source = Pixels.FromTexture(texture);
-                    badge ??= Pixels.FromExeIcon(EditorApplication.applicationPath);
-                    bigIcon = Badged(source, SystemMetric(SM_CXICON, dpi)).ToIcon();
-                    smallIcon = Badged(source, SystemMetric(SM_CXSMICON, dpi)).ToIcon();
+                    var source = IconPixels.FromTexture(texture);
+                    badge ??= FromExeIcon(EditorApplication.applicationPath);
+                    bigIcon = ToIcon(source.Badged(badge, SystemMetric(SM_CXICON, dpi)));
+                    smallIcon = ToIcon(source.Badged(badge, SystemMetric(SM_CXSMICON, dpi)));
                     iconFile = WriteIconFile(source);
                 }
                 catch (Exception e)
@@ -107,27 +99,16 @@ namespace BiteMe.EditorWindowIcon
             SessionState.SetString(SessionKey, $"{bigIcon.ToInt64()},{smallIcon.ToInt64()}");
         }
 
-        static Pixels Badged(Pixels source, int size)
-        {
-            var icon = source.Resize(size, size);
-            if (badge != null)
-            {
-                int badgeSize = Mathf.Max(1, Mathf.RoundToInt(size * BadgeSize));
-                icon.Over(badge.Resize(badgeSize, badgeSize), size - badgeSize, size - badgeSize);
-            }
-            return icon;
-        }
-
         /// <summary>
         /// Writes the badged icon as a multi-size .ico in Library and returns its path. The name
         /// carries a content hash, since the taskbar caches icons by path.
         /// </summary>
-        static string WriteIconFile(Pixels source)
+        static string WriteIconFile(IconPixels source)
         {
             int[] sizes = { 16, 20, 24, 32, 40, 48, 64, 256 };
             var images = new List<byte[]>();
             foreach (int size in sizes)
-                images.Add(Badged(source, size).ToPng());
+                images.Add(source.Badged(badge, size).ToPng());
 
             using var stream = new MemoryStream();
             using (var writer = new BinaryWriter(stream, Encoding.UTF8, true))
@@ -153,7 +134,7 @@ namespace BiteMe.EditorWindowIcon
             }
             var bytes = stream.ToArray();
 
-            string folder = Path.Combine(ProjectRoot, "Library", "EditorWindowIcon");
+            string folder = Path.Combine(ProjectIcon.Root, "Library", "EditorWindowIcon");
             Directory.CreateDirectory(folder);
             string path = Path.Combine(folder, Hash128.Compute(bytes) + ".ico");
             foreach (var old in Directory.GetFiles(folder, "*.ico"))
@@ -185,9 +166,9 @@ namespace BiteMe.EditorWindowIcon
             {
                 bool on = iconFile != null;
                 SetProperty(store, PID_RelaunchIconResource, on ? iconFile + ",0" : null);
-                SetProperty(store, PID_RelaunchCommand, on ? $"\"{EditorApplication.applicationPath.Replace('/', '\\')}\" -projectPath \"{ProjectRoot}\"" : null);
-                SetProperty(store, PID_RelaunchDisplayNameResource, on ? Path.GetFileName(ProjectRoot) : null);
-                SetProperty(store, PID_ID, on ? "BiteMe.UnityEditor." + Hash128.Compute(ProjectRoot.ToLowerInvariant()) : null);
+                SetProperty(store, PID_RelaunchCommand, on ? $"\"{EditorApplication.applicationPath.Replace('/', '\\')}\" -projectPath \"{ProjectIcon.Root}\"" : null);
+                SetProperty(store, PID_RelaunchDisplayNameResource, on ? Path.GetFileName(ProjectIcon.Root) : null);
+                SetProperty(store, PID_ID, on ? "BiteMe.UnityEditor." + Hash128.Compute(ProjectIcon.Root.ToLowerInvariant()) : null);
                 store.Commit();
             }
             catch (Exception e)
@@ -216,8 +197,6 @@ namespace BiteMe.EditorWindowIcon
                     Marshal.FreeCoTaskMem(value.pointer);
             }
         }
-
-        static string ProjectRoot => Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
 
         /// <summary>The editor's visible top-level windows: the main window and floating ones.</summary>
         static List<IntPtr> UnityWindows()
@@ -251,203 +230,88 @@ namespace BiteMe.EditorWindowIcon
             catch (EntryPointNotFoundException) { return GetSystemMetrics(index); }
         }
 
-        /// <summary>Straight-alpha RGBA pixels, top row first.</summary>
-        class Pixels
+        /// <summary>The largest icon in the editor executable: the Unity logo of this version.</summary>
+        static IconPixels FromExeIcon(string exePath)
         {
-            public readonly int Width, Height;
-            public readonly Color32[] Data;
-
-            Pixels(int width, int height)
+            var icons = new IntPtr[1];
+            var ids = new int[1];
+            if (PrivateExtractIcons(exePath.Replace('/', '\\'), 0, 256, 256, icons, ids, 1, 0) == 0 || icons[0] == IntPtr.Zero)
+                return null;
+            try
             {
-                Width = width;
-                Height = height;
-                Data = new Color32[width * height];
-            }
-
-            /// <summary>Works on any texture, readable and compressed or not, by drawing it to a render texture.</summary>
-            public static Pixels FromTexture(Texture texture)
-            {
-                int w = texture.width, h = texture.height;
-                var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-                var active = RenderTexture.active;
-                var copy = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                if (!GetIconInfo(icons[0], out var info))
+                    return null;
                 try
                 {
-                    Graphics.Blit(texture, rt);
-                    RenderTexture.active = rt;
-                    copy.ReadPixels(new Rect(0, 0, w, h), 0, 0);
-                    var rows = copy.GetPixels32();
-                    var pixels = new Pixels(w, h);
-                    for (int y = 0; y < h; y++)
-                        Array.Copy(rows, (h - 1 - y) * w, pixels.Data, y * w, w);
+                    if (info.hbmColor == IntPtr.Zero)
+                        return null;
+                    GetObject(info.hbmColor, Marshal.SizeOf<BITMAP>(), out BITMAP bitmap);
+                    int w = bitmap.bmWidth, h = bitmap.bmHeight;
+                    var header = Header(w, h);
+                    var bgra = new byte[w * h * 4];
+                    IntPtr dc = GetDC(IntPtr.Zero);
+                    int lines = GetDIBits(dc, info.hbmColor, 0, (uint)h, bgra, ref header, DIB_RGB_COLORS);
+                    ReleaseDC(IntPtr.Zero, dc);
+                    if (lines == 0)
+                        return null;
+
+                    var pixels = new IconPixels(w, h);
+                    bool hasAlpha = false;
+                    for (int i = 0; i < pixels.Data.Length; i++)
+                    {
+                        pixels.Data[i] = new Color32(bgra[i * 4 + 2], bgra[i * 4 + 1], bgra[i * 4], bgra[i * 4 + 3]);
+                        hasAlpha |= bgra[i * 4 + 3] != 0;
+                    }
+                    if (!hasAlpha)
+                        for (int i = 0; i < pixels.Data.Length; i++)
+                            pixels.Data[i].a = 255;
                     return pixels;
                 }
                 finally
                 {
-                    RenderTexture.active = active;
-                    RenderTexture.ReleaseTemporary(rt);
-                    UnityEngine.Object.DestroyImmediate(copy);
+                    DeleteObject(info.hbmColor);
+                    DeleteObject(info.hbmMask);
                 }
             }
-
-            /// <summary>The largest icon in the editor executable: the Unity logo of this version.</summary>
-            public static Pixels FromExeIcon(string exePath)
+            finally
             {
-                var icons = new IntPtr[1];
-                var ids = new int[1];
-                if (PrivateExtractIcons(exePath.Replace('/', '\\'), 0, 256, 256, icons, ids, 1, 0) == 0 || icons[0] == IntPtr.Zero)
-                    return null;
-                try
-                {
-                    if (!GetIconInfo(icons[0], out var info))
-                        return null;
-                    try
-                    {
-                        if (info.hbmColor == IntPtr.Zero)
-                            return null;
-                        GetObject(info.hbmColor, Marshal.SizeOf<BITMAP>(), out BITMAP bitmap);
-                        int w = bitmap.bmWidth, h = bitmap.bmHeight;
-                        var header = Header(w, h);
-                        var bgra = new byte[w * h * 4];
-                        IntPtr dc = GetDC(IntPtr.Zero);
-                        int lines = GetDIBits(dc, info.hbmColor, 0, (uint)h, bgra, ref header, DIB_RGB_COLORS);
-                        ReleaseDC(IntPtr.Zero, dc);
-                        if (lines == 0)
-                            return null;
-
-                        var pixels = new Pixels(w, h);
-                        bool hasAlpha = false;
-                        for (int i = 0; i < pixels.Data.Length; i++)
-                        {
-                            pixels.Data[i] = new Color32(bgra[i * 4 + 2], bgra[i * 4 + 1], bgra[i * 4], bgra[i * 4 + 3]);
-                            hasAlpha |= bgra[i * 4 + 3] != 0;
-                        }
-                        if (!hasAlpha)
-                            for (int i = 0; i < pixels.Data.Length; i++)
-                                pixels.Data[i].a = 255;
-                        return pixels;
-                    }
-                    finally
-                    {
-                        DeleteObject(info.hbmColor);
-                        DeleteObject(info.hbmMask);
-                    }
-                }
-                finally
-                {
-                    DestroyIcon(icons[0]);
-                }
+                DestroyIcon(icons[0]);
             }
-
-            /// <summary>Area-averaged resample (box filter) with premultiplied alpha, so edges stay clean.</summary>
-            public Pixels Resize(int width, int height)
-            {
-                var result = new Pixels(width, height);
-                float sx = (float)Width / width, sy = (float)Height / height;
-                for (int y = 0; y < height; y++)
-                {
-                    float y0 = y * sy, y1 = (y + 1) * sy;
-                    for (int x = 0; x < width; x++)
-                    {
-                        float x0 = x * sx, x1 = (x + 1) * sx;
-                        float r = 0, g = 0, b = 0, a = 0, weight = 0;
-                        for (int j = (int)y0; j < Mathf.Min(Height, Mathf.CeilToInt(y1)); j++)
-                        {
-                            float wy = Mathf.Min(y1, j + 1) - Mathf.Max(y0, j);
-                            for (int i = (int)x0; i < Mathf.Min(Width, Mathf.CeilToInt(x1)); i++)
-                            {
-                                float w = wy * (Mathf.Min(x1, i + 1) - Mathf.Max(x0, i));
-                                var c = Data[j * Width + i];
-                                float ca = c.a * w;
-                                r += c.r * ca;
-                                g += c.g * ca;
-                                b += c.b * ca;
-                                a += ca;
-                                weight += w;
-                            }
-                        }
-                        result.Data[y * width + x] = a <= 0 ? default : new Color32(
-                            (byte)Mathf.Round(r / a), (byte)Mathf.Round(g / a), (byte)Mathf.Round(b / a),
-                            (byte)Mathf.Round(a / weight));
-                    }
-                }
-                return result;
-            }
-
-            /// <summary>Draws <paramref name="top"/> over these pixels with its top-left corner at (x, y).</summary>
-            public void Over(Pixels top, int left, int upper)
-            {
-                for (int y = 0; y < top.Height; y++)
-                for (int x = 0; x < top.Width; x++)
-                {
-                    int tx = left + x, ty = upper + y;
-                    if (tx < 0 || ty < 0 || tx >= Width || ty >= Height)
-                        continue;
-                    var src = top.Data[y * top.Width + x];
-                    ref var dst = ref Data[ty * Width + tx];
-                    float sa = src.a / 255f, da = dst.a / 255f * (1 - sa), outA = sa + da;
-                    if (outA <= 0)
-                        continue;
-                    dst = new Color32(
-                        (byte)Mathf.Round((src.r * sa + dst.r * da) / outA),
-                        (byte)Mathf.Round((src.g * sa + dst.g * da) / outA),
-                        (byte)Mathf.Round((src.b * sa + dst.b * da) / outA),
-                        (byte)Mathf.Round(outA * 255));
-                }
-            }
-
-            public byte[] ToPng()
-            {
-                var texture = new Texture2D(Width, Height, TextureFormat.RGBA32, false);
-                try
-                {
-                    var rows = new Color32[Data.Length];
-                    for (int y = 0; y < Height; y++)
-                        Array.Copy(Data, y * Width, rows, (Height - 1 - y) * Width, Width);
-                    texture.SetPixels32(rows);
-                    return texture.EncodeToPNG();
-                }
-                finally
-                {
-                    UnityEngine.Object.DestroyImmediate(texture);
-                }
-            }
-
-            public IntPtr ToIcon()
-            {
-                var header = Header(Width, Height);
-                IntPtr dc = GetDC(IntPtr.Zero);
-                IntPtr color = CreateDIBSection(dc, ref header, DIB_RGB_COLORS, out IntPtr bits, IntPtr.Zero, 0);
-                ReleaseDC(IntPtr.Zero, dc);
-                var bgra = new byte[Data.Length * 4];
-                for (int i = 0; i < Data.Length; i++)
-                {
-                    bgra[i * 4] = Data[i].b;
-                    bgra[i * 4 + 1] = Data[i].g;
-                    bgra[i * 4 + 2] = Data[i].r;
-                    bgra[i * 4 + 3] = Data[i].a;
-                }
-                Marshal.Copy(bgra, 0, bits, bgra.Length);
-
-                // All-zero AND mask: the alpha channel decides transparency. Rows are word-aligned.
-                IntPtr mask = CreateBitmap(Width, Height, 1, 1, new byte[(Width + 15) / 16 * 2 * Height]);
-                var info = new ICONINFO { fIcon = true, hbmColor = color, hbmMask = mask };
-                IntPtr icon = CreateIconIndirect(ref info);
-                DeleteObject(color);
-                DeleteObject(mask);
-                return icon;
-            }
-
-            static BITMAPINFOHEADER Header(int width, int height) => new BITMAPINFOHEADER
-            {
-                biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
-                biWidth = width,
-                biHeight = -height,   // top-down rows
-                biPlanes = 1,
-                biBitCount = 32,
-            };
         }
 
+        static IntPtr ToIcon(IconPixels pixels)
+        {
+            var header = Header(pixels.Width, pixels.Height);
+            IntPtr dc = GetDC(IntPtr.Zero);
+            IntPtr color = CreateDIBSection(dc, ref header, DIB_RGB_COLORS, out IntPtr bits, IntPtr.Zero, 0);
+            ReleaseDC(IntPtr.Zero, dc);
+            var bgra = new byte[pixels.Data.Length * 4];
+            for (int i = 0; i < pixels.Data.Length; i++)
+            {
+                bgra[i * 4] = pixels.Data[i].b;
+                bgra[i * 4 + 1] = pixels.Data[i].g;
+                bgra[i * 4 + 2] = pixels.Data[i].r;
+                bgra[i * 4 + 3] = pixels.Data[i].a;
+            }
+            Marshal.Copy(bgra, 0, bits, bgra.Length);
+
+            // All-zero AND mask: the alpha channel decides transparency. Rows are word-aligned.
+            IntPtr mask = CreateBitmap(pixels.Width, pixels.Height, 1, 1, new byte[(pixels.Width + 15) / 16 * 2 * pixels.Height]);
+            var info = new ICONINFO { fIcon = true, hbmColor = color, hbmMask = mask };
+            IntPtr icon = CreateIconIndirect(ref info);
+            DeleteObject(color);
+            DeleteObject(mask);
+            return icon;
+        }
+
+        static BITMAPINFOHEADER Header(int width, int height) => new BITMAPINFOHEADER
+        {
+            biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
+            biWidth = width,
+            biHeight = -height,   // top-down rows
+            biPlanes = 1,
+            biBitCount = 32,
+        };
         // Win32 -----------------------------------------------------------------------------------
 
         const uint WM_SETICON = 0x0080, WM_GETICON = 0x007F;

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+- Apply the badged project icon to Unity windows on Linux under X11 and XWayland.
+- Give each project its own Plasma taskbar button and pinnable launcher.
+- Relaunch Linux projects with Unity CLI after the previous Editor releases the project lock.
+- Document the verified KDE stack and compatibility targets.
+
 ## [1.0.2] - 2026-10-28
 
 - The author is BiteMe Games.
