@@ -41,13 +41,13 @@ namespace BiteMe.EditorWindowIcon
 
         static void Update()
         {
-            double now = EditorApplication.timeSinceStartup;
+            var now = EditorApplication.timeSinceStartup;
             if (now < nextCheck || EditorApplication.isCompiling || EditorApplication.isUpdating)
                 return;
             nextCheck = now + CheckInterval;
 
             var texture = ProjectIcon.GetDefault();
-            string key = texture == null ? "" : $"{AssetDatabase.GetAssetPath(texture)}|{texture.imageContentsHash}";
+            var key = texture == null ? "" : $"{AssetDatabase.GetAssetPath(texture)}|{texture.imageContentsHash}";
             if (key != iconKey)
             {
                 try
@@ -90,21 +90,21 @@ namespace BiteMe.EditorWindowIcon
             }
 
             var source = IconPixels.FromTexture(texture);
-            int elementCount = 0;
-            foreach (int size in IconSizes)
+            var elementCount = 0;
+            foreach (var size in IconSizes)
                 elementCount += 2 + size * size;
 
             var argb = new uint[elementCount];
-            int offset = 0;
-            foreach (int size in IconSizes)
+            var offset = 0;
+            foreach (var size in IconSizes)
             {
                 argb[offset++] = (uint)size;
                 argb[offset++] = (uint)size;
-                foreach (Color32 color in source.Badged(badge, size).Data)
+                foreach (var color in source.Badged(badge, size).Data)
                     argb[offset++] = ((uint)color.a << 24) | ((uint)color.r << 16) | ((uint)color.g << 8) | color.b;
             }
 
-            byte[] png = source.Badged(badge, 256).ToPng();
+            var png = source.Badged(badge, 256).ToPng();
             windowIcon = new byte[argb.Length * sizeof(uint)];
             Buffer.BlockCopy(argb, 0, windowIcon, 0, windowIcon.Length);
             launcherPng = png;
@@ -115,9 +115,9 @@ namespace BiteMe.EditorWindowIcon
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             try
             {
-                foreach (string file in new[] { "LargeUnityAppIcon.png", "LargeUnityIcon.png" })
+                foreach (var file in new[] { "LargeUnityAppIcon.png", "LargeUnityIcon.png" })
                 {
-                    string path = Path.Combine(EditorApplication.applicationContentsPath, "Resources", file);
+                    var path = Path.Combine(EditorApplication.applicationContentsPath, "Resources", file);
                     if (File.Exists(path) && texture.LoadImage(File.ReadAllBytes(path)))
                         return IconPixels.FromTexture(texture);
                 }
@@ -182,7 +182,7 @@ namespace BiteMe.EditorWindowIcon
                 }
             }
 
-            string launcherId = launcherPath == null ? null : LinuxProjectLauncher.Id;
+            var launcherId = launcherPath == null ? null : LinuxProjectLauncher.Id;
             windows?.Update(windowIcon, launcherId, launcherPath);
         }
 

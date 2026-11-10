@@ -45,7 +45,7 @@ namespace BiteMe.EditorWindowIcon
                 copy.ReadPixels(new Rect(0, 0, w, h), 0, 0);
                 var rows = copy.GetPixels32();
                 var pixels = new IconPixels(w, h);
-                for (int y = 0; y < h; y++)
+                for (var y = 0; y < h; y++)
                     Array.Copy(rows, (h - 1 - y) * w, pixels.Data, y * w, w);
                 return pixels;
             }
@@ -62,21 +62,21 @@ namespace BiteMe.EditorWindowIcon
         {
             var result = new IconPixels(width, height);
             float sx = (float)Width / width, sy = (float)Height / height;
-            for (int y = 0; y < height; y++)
+            for (var y = 0; y < height; y++)
             {
                 float y0 = y * sy, y1 = (y + 1) * sy;
-                for (int x = 0; x < width; x++)
+                for (var x = 0; x < width; x++)
                 {
                     float x0 = x * sx, x1 = (x + 1) * sx;
                     float r = 0, g = 0, b = 0, a = 0, weight = 0;
-                    for (int j = (int)y0; j < Mathf.Min(Height, Mathf.CeilToInt(y1)); j++)
+                    for (var j = (int)y0; j < Mathf.Min(Height, Mathf.CeilToInt(y1)); j++)
                     {
-                        float wy = Mathf.Min(y1, j + 1) - Mathf.Max(y0, j);
-                        for (int i = (int)x0; i < Mathf.Min(Width, Mathf.CeilToInt(x1)); i++)
+                        var wy = Mathf.Min(y1, j + 1) - Mathf.Max(y0, j);
+                        for (var i = (int)x0; i < Mathf.Min(Width, Mathf.CeilToInt(x1)); i++)
                         {
-                            float w = wy * (Mathf.Min(x1, i + 1) - Mathf.Max(x0, i));
+                            var w = wy * (Mathf.Min(x1, i + 1) - Mathf.Max(x0, i));
                             var c = Data[j * Width + i];
-                            float ca = c.a * w;
+                            var ca = c.a * w;
                             r += c.r * ca;
                             g += c.g * ca;
                             b += c.b * ca;
@@ -95,8 +95,8 @@ namespace BiteMe.EditorWindowIcon
         /// <summary>Draws <paramref name="top"/> over these pixels with its top-left corner at (x, y).</summary>
         void Over(IconPixels top, int left, int upper)
         {
-            for (int y = 0; y < top.Height; y++)
-            for (int x = 0; x < top.Width; x++)
+            for (var y = 0; y < top.Height; y++)
+            for (var x = 0; x < top.Width; x++)
             {
                 int tx = left + x, ty = upper + y;
                 if (tx < 0 || ty < 0 || tx >= Width || ty >= Height)
@@ -119,7 +119,7 @@ namespace BiteMe.EditorWindowIcon
             var icon = Resize(size, size);
             if (badge != null)
             {
-                int badgeSize = Mathf.Max(1, Mathf.RoundToInt(size * 0.5f));
+                var badgeSize = Mathf.Max(1, Mathf.RoundToInt(size * 0.5f));
                 icon.Over(badge.Resize(badgeSize, badgeSize), size - badgeSize, size - badgeSize);
             }
             return icon;
@@ -131,7 +131,7 @@ namespace BiteMe.EditorWindowIcon
             try
             {
                 var rows = new Color32[Data.Length];
-                for (int y = 0; y < Height; y++)
+                for (var y = 0; y < Height; y++)
                     Array.Copy(Data, y * Width, rows, (Height - 1 - y) * Width, Width);
                 texture.SetPixels32(rows);
                 return texture.EncodeToPNG();

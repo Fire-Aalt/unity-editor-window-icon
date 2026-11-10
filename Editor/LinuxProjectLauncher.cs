@@ -40,37 +40,37 @@ exec ""$cli"" --non-interactive open --wait --editor-path ""$editor"" ""$project
 
         public static string Publish(byte[] png)
         {
-            string entryPath = EntryPath;
-            string previous = File.Exists(entryPath) ? File.ReadAllText(entryPath) : null;
+            var entryPath = EntryPath;
+            var previous = File.Exists(entryPath) ? File.ReadAllText(entryPath) : null;
             if (previous != null && !IsOwned(previous))
                 throw new IOException("A desktop entry with the same ID already exists.");
 
-            string editor = EditorApplication.applicationPath;
+            var editor = EditorApplication.applicationPath;
             if (!Path.IsPathRooted(editor))
                 throw new IOException("The Unity Editor executable path is unavailable.");
 
-            string project = ProjectIcon.Root;
-            string cli = ResolveCommand("unity");
-            string flock = ResolveCommand("flock");
+            var project = ProjectIcon.Root;
+            var cli = ResolveCommand("unity");
+            var flock = ResolveCommand("flock");
 
-            string iconPath = Path.Combine(IconFolder, Hash128.Compute(png) + ".png");
+            var iconPath = Path.Combine(IconFolder, Hash128.Compute(png) + ".png");
             if (!File.Exists(iconPath))
                 WriteAtomically(iconPath, png);
 
-            string exec = QuoteArgument(flock) + " -o -w " + LaunchWaitSeconds + " -E 0 " + QuoteArgument(project) +
-                " /bin/sh -c " + QuoteArgument(LaunchProject) + " unity-editor-window-icon " +
-                QuoteArgument(cli) + " " + QuoteArgument(editor) + " " + QuoteArgument(project) + " " +
-                QuoteArgument(flock) + " " + LaunchWaitSeconds;
-            string entry = "[Desktop Entry]\n" +
-                "Type=Application\n" +
-                "Name=" + EscapeValue("Unity - " + Path.GetFileName(project)) + "\n" +
-                "Exec=" + EscapeValue(exec) + "\n" +
-                "TryExec=" + EscapeValue(cli) + "\n" +
-                "Icon=" + EscapeValue(iconPath) + "\n" +
-                "StartupWMClass=" + Id + "\n" +
-                "Terminal=false\n" +
-                "Categories=Development;\n" +
-                OwnershipKey + "\n";
+            var exec = QuoteArgument(flock) + " -o -w " + LaunchWaitSeconds + " -E 0 " + QuoteArgument(project) +
+                       " /bin/sh -c " + QuoteArgument(LaunchProject) + " unity-editor-window-icon " +
+                       QuoteArgument(cli) + " " + QuoteArgument(editor) + " " + QuoteArgument(project) + " " +
+                       QuoteArgument(flock) + " " + LaunchWaitSeconds;
+            var entry = "[Desktop Entry]\n" +
+                        "Type=Application\n" +
+                        "Name=" + EscapeValue("Unity - " + Path.GetFileName(project)) + "\n" +
+                        "Exec=" + EscapeValue(exec) + "\n" +
+                        "TryExec=" + EscapeValue(cli) + "\n" +
+                        "Icon=" + EscapeValue(iconPath) + "\n" +
+                        "StartupWMClass=" + Id + "\n" +
+                        "Terminal=false\n" +
+                        "Categories=Development;\n" +
+                        OwnershipKey + "\n";
 
             if (entry != previous)
                 WriteAtomically(entryPath, Encoding.UTF8.GetBytes(entry));
@@ -82,7 +82,7 @@ exec ""$cli"" --non-interactive open --wait --editor-path ""$editor"" ""$project
 
         public static void Remove()
         {
-            string entryPath = EntryPath;
+            var entryPath = EntryPath;
             if (File.Exists(entryPath))
             {
                 if (!IsOwned(File.ReadAllText(entryPath)))
@@ -97,11 +97,11 @@ exec ""$cli"" --non-interactive open --wait --editor-path ""$editor"" ""$project
 
         static string DataHome()
         {
-            string configured = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+            var configured = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
             if (Path.IsPathRooted(configured))
                 return configured;
 
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (!Path.IsPathRooted(home))
                 throw new IOException("The user's XDG data directory is unavailable.");
             return Path.Combine(home, ".local", "share");
@@ -109,14 +109,14 @@ exec ""$cli"" --non-interactive open --wait --editor-path ""$editor"" ""$project
 
         static string ResolveCommand(string name)
         {
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            string paths = Environment.GetEnvironmentVariable("PATH") + ":" +
-                Path.Combine(home, ".local", "bin") + ":/usr/bin:/bin";
-            foreach (string folder in paths.Split(':'))
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var paths = Environment.GetEnvironmentVariable("PATH") + ":" +
+                        Path.Combine(home, ".local", "bin") + ":/usr/bin:/bin";
+            foreach (var folder in paths.Split(':'))
             {
                 if (!Path.IsPathRooted(folder) || folder.Contains("="))
                     continue;
-                string candidate = Path.Combine(folder, name);
+                var candidate = Path.Combine(folder, name);
                 if (File.Exists(candidate) && access(candidate, 1) == 0) // X_OK
                     return candidate;
             }
@@ -131,9 +131,9 @@ exec ""$cli"" --non-interactive open --wait --editor-path ""$editor"" ""$project
             if (!Directory.Exists(IconFolder))
                 return;
 
-            foreach (string path in Directory.EnumerateFiles(IconFolder, "*.png"))
+            foreach (var path in Directory.EnumerateFiles(IconFolder, "*.png"))
             {
-                string hash = Path.GetFileNameWithoutExtension(path);
+                var hash = Path.GetFileNameWithoutExtension(path);
                 if (path != current && hash.Length == 32 && Array.TrueForAll(hash.ToCharArray(), Uri.IsHexDigit))
                     File.Delete(path);
             }
@@ -148,9 +148,9 @@ exec ""$cli"" --non-interactive open --wait --editor-path ""$editor"" ""$project
 
         static void WriteAtomically(string path, byte[] data)
         {
-            string directory = Path.GetDirectoryName(path);
+            var directory = Path.GetDirectoryName(path);
             Directory.CreateDirectory(directory);
-            string temporary = Path.Combine(directory, "." + Guid.NewGuid().ToString("N"));
+            var temporary = Path.Combine(directory, "." + Guid.NewGuid().ToString("N"));
             try
             {
                 File.WriteAllBytes(temporary, data);

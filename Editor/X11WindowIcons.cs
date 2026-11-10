@@ -53,16 +53,16 @@ namespace BiteMe.EditorWindowIcon
 
         public static X11WindowIcons Connect()
         {
-            string display = Environment.GetEnvironmentVariable("DISPLAY");
+            var display = Environment.GetEnvironmentVariable("DISPLAY");
             if (string.IsNullOrEmpty(display) ||
                 (!display.StartsWith(":", StringComparison.Ordinal) && !display.StartsWith("unix:", StringComparison.Ordinal)))
                 return null;
 
-            IntPtr connection = xcb_connect(display, out int screen);
+            var connection = xcb_connect(display, out var screen);
             if (connection == IntPtr.Zero)
                 return null;
 
-            bool adopted = false;
+            var adopted = false;
             try
             {
                 if (xcb_connection_has_error(connection) != 0)
@@ -74,7 +74,7 @@ namespace BiteMe.EditorWindowIcon
                 if (screens.Remaining == 0)
                     return null;
 
-                uint root = unchecked((uint)Marshal.ReadInt32(screens.Data));
+                var root = unchecked((uint)Marshal.ReadInt32(screens.Data));
                 var result = new X11WindowIcons(connection, root);
                 adopted = true;
                 return result;
@@ -105,13 +105,13 @@ namespace BiteMe.EditorWindowIcon
                 lastIcon = icons;
             }
 
-            byte[] instance = desktopId == null ? null : Encoding.UTF8.GetBytes(desktopId);
+            var instance = desktopId == null ? null : Encoding.UTF8.GetBytes(desktopId);
             var gtkId = instance == null ? null : new Property(utf8, 8, instance);
             var kdeFile = desktopFile == null ? null : new Property(utf8, 8, Encoding.UTF8.GetBytes(desktopFile));
             var live = new HashSet<uint>();
-            for (int i = 0; i < clients.Data.Length; i += sizeof(uint))
+            for (var i = 0; i < clients.Data.Length; i += sizeof(uint))
             {
-                uint window = BitConverter.ToUInt32(clients.Data, i);
+                var window = BitConverter.ToUInt32(clients.Data, i);
                 if (!Owns(window) || !IsEditorWindow(window))
                     continue;
 
@@ -123,13 +123,13 @@ namespace BiteMe.EditorWindowIcon
                 ApplyIdentity(window, instance, gtkId, kdeFile, state);
             }
 
-            foreach (uint window in overrides.Keys.Where(window => !live.Contains(window)).ToArray())
+            foreach (var window in overrides.Keys.Where(window => !live.Contains(window)).ToArray())
                 RestoreWindow(window);
         }
 
         public void Restore()
         {
-            foreach (uint window in overrides.Keys.ToArray())
+            foreach (var window in overrides.Keys.ToArray())
                 RestoreWindow(window);
         }
 
@@ -151,8 +151,8 @@ namespace BiteMe.EditorWindowIcon
 
         bool IsKWin()
         {
-            uint check = Intern("_NET_SUPPORTING_WM_CHECK");
-            uint name = Intern("_NET_WM_NAME");
+            var check = Intern("_NET_SUPPORTING_WM_CHECK");
+            var name = Intern("_NET_WM_NAME");
             return TryRead(root, check, 1, out var manager) && Is32Bit(manager, Window) &&
                 manager.Data.Length == sizeof(uint) &&
                 TryRead(BitConverter.ToUInt32(manager.Data, 0), name, HintReadUnits, out var value) &&
@@ -171,19 +171,19 @@ namespace BiteMe.EditorWindowIcon
             if (!Is32Bit(type, Atom) || type.Data.Length == 0)
                 return false;
 
-            uint primaryType = BitConverter.ToUInt32(type.Data, 0);
+            var primaryType = BitConverter.ToUInt32(type.Data, 0);
             return primaryType == normal || primaryType == utility;
         }
 
         Property FitIcons(byte[] icons)
         {
-            int length = 0;
-            long limit = maxRequestUnits * 4L - 28; // ChangeProperty header, including BIG-REQUESTS.
+            var length = 0;
+            var limit = maxRequestUnits * 4L - 28; // ChangeProperty header, including BIG-REQUESTS.
             while (length < icons.Length)
             {
-                int width = BitConverter.ToInt32(icons, length);
-                int height = BitConverter.ToInt32(icons, length + sizeof(uint));
-                int end = length + (2 + width * height) * sizeof(uint);
+                var width = BitConverter.ToInt32(icons, length);
+                var height = BitConverter.ToInt32(icons, length + sizeof(uint));
+                var end = length + (2 + width * height) * sizeof(uint);
                 if (end > limit)
                     break;
                 length = end;
@@ -205,7 +205,7 @@ namespace BiteMe.EditorWindowIcon
         {
             // Shells such as GNOME and Plasma can match StartupWMClass before using a desktop ID.
             // Give each project its own X11 instance and preserve Unity's class for window rules.
-            bool changed = ApplyInstance(window, instance, ref state.Class);
+            var changed = ApplyInstance(window, instance, ref state.Class);
             Apply(window, gtkApplicationId, HintReadUnits, gtkId, ref state.GtkId);
             changed |= Apply(window, kdeDesktopFile, HintReadUnits, kdeFile, ref state.KdeFile);
             if (changed && skipTaskbar != 0)
@@ -221,12 +221,12 @@ namespace BiteMe.EditorWindowIcon
                 current == null || current.Type != String || current.Format != 8)
                 return false;
 
-            int separator = Array.IndexOf(current.Data, (byte)0);
+            var separator = Array.IndexOf(current.Data, (byte)0);
             if (separator < 0 || current.Data[current.Data.Length - 1] != 0 ||
                 current.Data.AsSpan(0, separator).SequenceEqual(instance))
                 return false;
 
-            int classLength = current.Data.Length - separator - 1;
+            var classLength = current.Data.Length - separator - 1;
             var data = new byte[instance.Length + 1 + classLength];
             Buffer.BlockCopy(instance, 0, data, 0, instance.Length);
             Buffer.BlockCopy(current.Data, separator + 1, data, instance.Length + 1, classLength);
@@ -243,7 +243,7 @@ namespace BiteMe.EditorWindowIcon
             {
                 if (!Is32Bit(state, Atom))
                     return;
-                for (int i = 0; i < state.Data.Length; i += sizeof(uint))
+                for (var i = 0; i < state.Data.Length; i += sizeof(uint))
                     if (BitConverter.ToUInt32(state.Data, i) == skipTaskbar)
                         return;
             }
@@ -253,9 +253,9 @@ namespace BiteMe.EditorWindowIcon
                 ResponseType = 33, Format = 32, Window = window, Type = windowState,
                 Action = 1, FirstProperty = skipTaskbar, Source = 1
             };
-            uint add = xcb_send_event_checked(connection, 0, root, SubstructureEvents, ref message);
+            var add = xcb_send_event_checked(connection, 0, root, SubstructureEvents, ref message);
             message.Action = 0;
-            uint remove = xcb_send_event_checked(connection, 0, root, SubstructureEvents, ref message);
+            var remove = xcb_send_event_checked(connection, 0, root, SubstructureEvents, ref message);
             free(xcb_request_check(connection, add));
             free(xcb_request_check(connection, remove));
         }
@@ -274,7 +274,7 @@ namespace BiteMe.EditorWindowIcon
             if (desired == null)
             {
                 // A different writer may have updated this window since our last pass.
-                bool ours = Property.Same(current, change.Applied);
+                var ours = Property.Same(current, change.Applied);
                 if (ours && !Write(window, atom, change.Original))
                     return false;
                 change = null;
@@ -284,7 +284,7 @@ namespace BiteMe.EditorWindowIcon
             if (Property.Same(current, desired) || !Write(window, atom, desired))
                 return false;
 
-            Property original = change != null && Property.Same(current, change.Applied) ? change.Original : current;
+            var original = change != null && Property.Same(current, change.Applied) ? change.Original : current;
             change = new Change(original, desired);
             return true;
         }
@@ -292,8 +292,8 @@ namespace BiteMe.EditorWindowIcon
         bool TryRead(uint window, uint atom, uint limit, out Property property)
         {
             property = null;
-            uint cookie = xcb_get_property(connection, 0, window, atom, 0, 0, limit);
-            IntPtr reply = xcb_get_property_reply(connection, cookie, out IntPtr error);
+            var cookie = xcb_get_property(connection, 0, window, atom, 0, 0, limit);
+            var reply = xcb_get_property_reply(connection, cookie, out var error);
             try
             {
                 if (error != IntPtr.Zero || reply == IntPtr.Zero)
@@ -305,7 +305,7 @@ namespace BiteMe.EditorWindowIcon
                 if (header.BytesAfter != 0 || (header.Format != 8 && header.Format != 16 && header.Format != 32))
                     return false;
 
-                int length = xcb_get_property_value_length(reply);
+                var length = xcb_get_property_value_length(reply);
                 if (length < 0 || length > limit * 4 || length % (header.Format / 8) != 0)
                     return false;
                 var data = new byte[length];
@@ -323,19 +323,19 @@ namespace BiteMe.EditorWindowIcon
 
         bool Write(uint window, uint atom, Property property)
         {
-            uint cookie = property == null
+            var cookie = property == null
                 ? xcb_delete_property_checked(connection, window, atom)
                 : xcb_change_property_checked(connection, 0, window, atom, property.Type, property.Format,
                     (uint)property.Data.Length / (uint)(property.Format / 8), property.Data);
-            IntPtr error = xcb_request_check(connection, cookie);
+            var error = xcb_request_check(connection, cookie);
             free(error);
             return error == IntPtr.Zero;
         }
 
         uint Intern(string name)
         {
-            uint cookie = xcb_intern_atom(connection, 0, (ushort)name.Length, name);
-            IntPtr reply = xcb_intern_atom_reply(connection, cookie, out IntPtr error);
+            var cookie = xcb_intern_atom(connection, 0, (ushort)name.Length, name);
+            var reply = xcb_intern_atom_reply(connection, cookie, out var error);
             try
             {
                 // The atom follows the eight-byte X11 reply header.
